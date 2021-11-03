@@ -1,0 +1,450 @@
+﻿@model IEnumerable<WebTest.Models.FileModel>
+@{
+    ViewBag.Title = "File Management";
+}
+
+<script src="~/Scripts/jquery-3.4.1.min.js"></script>
+<script>
+
+
+    //kullanıcı bilgileri
+    $.getJSON("@System.Configuration.ConfigurationManager.AppSettings["ApiUserInfoUrl"]" + "@Session["mytoken"]", function (data) {
+       document.getElementById("username").innerHTML = data.name;
+       document.getElementById("usermail").innerHTML = data.email;
+       if (data.photourl != null) {
+           document.getElementById("pp").src = data.photourl;
+       }
+    });
+
+
+    function blockClickables() {
+        //Upload sırasında çevre elemanlara tıklanılabilmesi önlendi.
+        document.getElementById("btnUpload").style.pointerEvents = "none";
+        document.getElementById("uFile").style.pointerEvents = "none";
+        document.getElementById("dropdownMenu1").style.pointerEvents = "none";
+        document.getElementById("btnNewFolder").style.pointerEvents = "none";
+        document.getElementById("delFolder").style.pointerEvents = "none";
+        document.getElementById("crtFolderT").style.pointerEvents = "none";
+
+
+        var items = document.getElementsByClassName("fas fa-trash");
+        for (var i = 0; i < items.length; i++) {
+            items[i].style.pointerEvents = "none";
+        }
+        var items = document.getElementsByClassName("mydwn");
+        for (var i = 0; i < items.length; i++) {
+            items[i].style.pointerEvents = "none";
+        }
+    }
+
+    function downloadfile(filepath,filename) {
+
+        $.ajax({
+            url: "@System.Configuration.ConfigurationManager.AppSettings["ApiDownloadUrl"]" + "@Session["mytoken"]" + "&filepath=" + filepath,
+            type: 'Get',
+            success: function (response, status) {
+                if (response) {
+                    saveByteArray(response, filename);
+                }
+            }
+        })
+    }
+
+    // chrome üzerinden indirme yapmak için gerekli
+    var saveByteArray = (function () {
+        var y = document.createElement("p");
+        document.body.appendChild(y);
+        y.style = "display: none";
+        return function (data, name) {
+            var arr = data;
+
+            var ba = base64ToArrayBuffer(arr);
+
+            var a = window.document.createElement('a');
+            a.href = window.URL.createObjectURL(new Blob([ba], { type: 'application/octet-stream' }));
+            a.download = name;
+            document.body.appendChild(a)
+            a.click();
+            document.body.removeChild(a)
+        };
+    }());
+
+    // indirilen dosyayı blob'da kullanabilmek için convert
+    function base64ToArrayBuffer(base64) {
+        var binaryString = window.atob(base64);
+        var binaryLen = binaryString.length;
+        var bytes = new Uint8Array(binaryLen);
+        for (var i = 0; i < binaryLen; i++) {
+            var ascii = binaryString.charCodeAt(i);
+            bytes[i] = ascii;
+        }
+        return bytes;
+    }
+
+
+    function DeleteItem(filepath) {
+        
+        //path ile dosya ya da klasör silme
+        if (confirm("Are you sure you?")) {
+            blockClickables();
+            $.ajax({
+            url: "@System.Configuration.ConfigurationManager.AppSettings["ApiDeleteUrl"]" + "@Session["mytoken"]" + "&filepath=" + filepath,
+            type: 'Get',
+            success: function (response, status) {
+                if (response) {
+                    location.reload();
+                }
+            }
+        })
+        }
+
+    }
+    function DeleteFolder() {
+
+        filepath = document.getElementById("txtpath").value;
+        if (filepath != "" && filepath != "Root"  && filepath!=null) {
+            DeleteItem(filepath);
+        } else {
+
+        }
+
+    }
+
+    function CreateFolder() {
+        var fname = document.getElementById("txtNewFolder").value;
+        if ((fname != "")) {
+            blockClickables();
+            var root = document.getElementById("txtpath").value;
+            if (root == "Root") {
+                root = "";
+            }
+                var filepath = root+"/" + fname;
+
+            $.ajax({
+                url: "@System.Configuration.ConfigurationManager.AppSettings["ApiCreateFolderUrl"]" + "@Session["mytoken"]" + "&filepath=" + filepath,
+            type: 'Get',
+            success: function (response, status) {
+                if (response) {
+                    location.reload();
+                }
+            }
+        })
+        }
+
+    }
+    function toggleCreateFolderElements() {
+        if (document.getElementById("txtNewFolder").style.display=='none') {
+            document.getElementById("txtNewFolder").style.display = 'inline';
+            document.getElementById("btnNewFolder").style.display = 'inline';
+        } else {
+            document.getElementById("txtNewFolder").style.display = 'none';
+            document.getElementById("btnNewFolder").style.display = 'none';
+        }
+
+    }
+
+
+
+
+</script>
+<div id="head" class="col-md-12">
+    <p class="mytitle">Dropbox File Management Application</p>
+    <div id="info">
+        <div class="card mycard">
+            <img id="pp" class="pphoto" src="https://pbs.twimg.com/profile_images/1412502625350676480/VEKgUKGn_400x400.png" alt="ProfilePhotoHere">
+            <p id="username" style="font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;font-size:xx-large;"></p>
+            <p class="title">User</p>
+            <p id="usermail"></p>
+            <a id="btnLogOut" onclick="goLogOut()" class="btn btn-danger mylogout">Log Out</a>
+        </div>
+    </div>
+
+    <div id="fileplace" class="fileuploadarea">
+
+
+
+        @using (Html.BeginForm("UploadFile", "Home", FormMethod.Post, new { enctype = "multipart/form-data" }))
+        {
+
+            <div class="form-group">
+                <div>
+                    <input id="uFile" type="file" name="filedata" required />
+                </div>
+            </div>
+
+            <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Select Target &raquo;
+                </button>
+                <ul class="dropdown-menu multi-level" id="ddownlist" role="menu" aria-labelledby="dropdownMenu">
+                    <li class="dropdown-item"><a onclick='setUploadPath("Root")'>Root</a></li>
+
+                </ul>
+
+            </div>
+
+            <div class="form-group">
+                <div style="display:flex">
+
+                    <input type="text" name="filepath" id="txtpath" class="form-control" readonly />
+
+                    <a id="crtFolderT" onclick="toggleCreateFolderElements()" style="cursor:pointer;margin-left:1%;margin-top:6px;" class="mycreatebtn"><i class="fas fa-folder-plus"></i><span class="tooltiptext">Create New Folder</span></a>
+                    <a id="delFolder" onclick="DeleteFolder()" style="cursor:pointer;margin-left:1%;margin-top:6px;" class="mycreatebtn"><i class="fas fa-folder-minus"></i><span class="tooltiptext">Delete Folder</span></a>
+                </div>
+
+                <input id="txtNewFolder" type="text" class="form-control" style="display:none" placeholder="Folder Name" />
+                <a id="btnNewFolder" class="btn btn-info" onclick="CreateFolder()" style="display:none">Create</a>
+            </div>
+
+            <div class="form-group">
+                <div>
+                    <button id="btnUpload" type="submit" class="btn btn-info" onclick="toggleUploadProgress()">
+                        <i id="progressIcon" class="fas fa-spinner fa-spin" style="display:none"></i>
+                        <span id="txtUpload">Click To Upload</span>
+                        
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+
+<div>
+    @foreach (var item in Model)
+    {
+
+
+
+        <div class="col-md-4">
+            <div id="inner" style="margin: 5px; background-color: #f6f6f6; align-self: center; border-style: outset">
+                <i class="fas fa-trash" style="margin-left:95%;cursor:pointer;" onclick="DeleteItem('@item.filepath')"></i>
+                <p style="width: 100%; text-align: center; color: brown; font-family: monospace;font-size:smaller; ">@item.filepath</p>
+                <p style="width: 100%; text-align: center;font-family:monospace;">
+                    @item.filename
+                </p>
+                <p style="width: 100%; text-align: center; font-family: monospace;">
+                    @item.filesize
+                </p>
+
+                <a id="Button1" onclick="downloadfile('@item.filepath','@item.filename')" class="form-control mydwn" value="Download">
+                    Download <i class="fas fa-download"></i>
+                </a>
+
+            </div>
+        </div>
+
+    }
+</div>
+
+<script>
+    function goLogOut(url) {
+        window.open('https://www.dropbox.com/logout', '_blank');
+
+        window.location.href = "https://localhost:44302/Home/LogOut";
+
+    }
+    function setUploadPath(p) {
+
+        document.getElementById("txtpath").value = p;
+    }
+
+    function GetFolderPathList() {
+            $.ajax({
+                url: "@System.Configuration.ConfigurationManager.AppSettings["ApiFolderPathUrl"]" + "@Session["mytoken"]",
+            type: 'Get',
+            success: function (response, status) {
+                if (response) {
+                    $.each(response,function (index, value) {
+                        let l = document.createElement("li");
+                        l.className = "dropdown-item";
+                        let a = document.createElement("a");
+                        a.innerHTML = response[index];
+                        let str = String(response[index]);
+                        a.onclick = function () { setUploadPath(str) };
+                        l.appendChild(a);
+                        document.getElementById("ddownlist").append(l);
+
+                    });
+
+                }
+            }
+        })
+
+    }
+
+
+
+    GetFolderPathList();
+
+    function toggleUploadProgress() {
+        if (document.getElementById("uFile").value != "") {
+            // Upload sırasında icon görünüyor ve metin değişiyor.
+            document.getElementById("progressIcon").style.display = "inherit";
+            document.getElementById("txtUpload").innerText = "Uploading...";
+
+            
+            blockClickables();
+        }
+        
+        
+    }
+</script>
+<style>
+    .card {
+        box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+        max-width: 300px;
+        margin: auto;
+        text-align: center;
+    }
+
+    .title {
+        color: grey;
+        font-size: 18px;
+    }
+
+    button:hover, a:hover {
+        opacity: 0.7;
+    }
+</style>
+<style>
+    .dropdown-menu {
+        background-color: #eeeeee;
+        font-family: monospace;
+    }
+
+    .dropdown-submenu {
+        position: relative;
+    }
+
+    .dropdown-item {
+        color: grey;
+    }
+
+    .dropdown-submenu > .dropdown-menu {
+        top: 0;
+        left: 100%;
+        margin-top: -6px;
+        margin-left: -1px;
+        -webkit-border-radius: 0 6px 6px 6px;
+        -moz-border-radius: 0 6px 6px;
+        border-radius: 0 6px 6px 6px;
+    }
+
+    .dropdown-submenu:hover > .dropdown-menu {
+        display: block;
+    }
+
+    .dropdown-submenu > a:after {
+        display: block;
+        content: " ";
+        float: right;
+        width: 0;
+        height: 0;
+        border-color: transparent;
+        border-style: solid;
+        border-width: 5px 0 5px 5px;
+        border-left-color: #ccc;
+        margin-top: 5px;
+        margin-right: -10px;
+    }
+
+    .dropdown-submenu:hover > a:after {
+        border-left-color: black;
+    }
+
+    .dropdown-submenu.pull-left {
+        float: none;
+    }
+
+        .dropdown-submenu.pull-left > .dropdown-menu {
+            left: -100%;
+            margin-left: 10px;
+            -webkit-border-radius: 6px 0 6px 6px;
+            -moz-border-radius: 6px 0 6px 6px;
+            border-radius: 6px 0 6px 6px;
+        }
+
+    #dropdownMenu1 {
+        border: 1px solid grey;
+        font-family: monospace;
+    }
+
+    #txtpath {
+        font-family: monospace;
+        max-width: 40%;
+    }
+
+    .dropdown-menu > li > a {
+        font-family: monospace;
+    }
+
+        .dropdown-menu > li > a:hover {
+            color: white;
+            background-color: black;
+            cursor: pointer;
+        }
+
+    .mycard {
+        border: 2px solid aqua;
+        border-radius: 5px;
+    }
+
+    .mylogout {
+        margin: 2%;
+    }
+
+    .pphoto {
+        width: 50%;
+        margin-top: 2%;
+        border: 1px solid black;
+        border-radius: 50%;
+    }
+
+    .mytitle {
+        text-align: center;
+        font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+        font-size: xx-large;
+        margin: 2%;
+    }
+
+    .fileuploadarea {
+        margin-top: 3%;
+    }
+
+    .mydwn {
+        color: white;
+        cursor: pointer;
+        text-align: center;
+        background-color: #5bc0de;
+        border-radius: 0px;
+    }
+
+        .mydwn:hover {
+            text-decoration: none;
+        }
+
+    .tooltiptext {
+        visibility: hidden;
+        width: 120px;
+        color: dimgrey;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px 0;
+        /* Position the tooltip */
+        position: absolute;
+        z-index: 1;
+        bottom: 100%;
+        left: 50%;
+        margin-left: -60px;
+    }
+
+    .mycreatebtn {
+        position: relative;
+    }
+
+        .mycreatebtn:hover .tooltiptext {
+            visibility: visible;
+        }
+</style>
+
